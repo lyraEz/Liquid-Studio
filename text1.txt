@@ -1,3 +1,6 @@
+// primeira versao (backup)
+
+
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Upload, Download, Image as ImageIcon, Wand2, SlidersHorizontal,
