@@ -7,37 +7,29 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  const [image, setImage] = useState(null); // Imagem original intocada
-  const [processedImage, setProcessedImage] = useState(null); // Imagem com IA/Recortes
+  const [image, setImage] = useState(null);
+  const [processedImage, setProcessedImage] = useState(null);
   const [isProcessingAI, setIsProcessingAI] = useState(false);
-  const [aiActionType, setAiActionType] = useState(''); // 'bg' ou 'anime'
+  const [aiActionType, setAiActionType] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-  
-  // Controle do "Antes e Depois"
   const [showBefore, setShowBefore] = useState(false);
 
-  // Default controls
   const defaultControls = {
     blur: 0, brightness: 100, contrast: 100, saturation: 100,
     hue: 0, sepia: 0, grayscale: 0, invert: 0
   };
 
   const [controls, setControls] = useState(defaultControls);
-
-  // Sistema de Histórico (Undo/Redo)
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const controlsRef = useRef(controls);
   const processedImageRef = useRef(processedImage);
-
-  // Mantém as refs atualizadas pra usar no histórico sem bugar o estado
-  useEffect(() => { controlsRef.current = controls; }, [controls]);
-  useEffect(() => { processedImageRef.current = processedImage; }, [processedImage]);
-
   const fileInputRef = useRef(null);
   const canvasRef = useRef(null);
 
-  // Handle image upload
+  useEffect(() => { controlsRef.current = controls; }, [controls]);
+  useEffect(() => { processedImageRef.current = processedImage; }, [processedImage]);
+
   const handleUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -47,8 +39,6 @@ export default function App() {
         setImage(newImg);
         setProcessedImage(newImg);
         setControls(defaultControls);
-        
-        // Inicia o histórico
         setHistory([{ image: newImg, controls: defaultControls }]);
         setHistoryIndex(0);
       };
@@ -56,7 +46,6 @@ export default function App() {
     }
   };
 
-  // Salva o estado atual no histórico (chamado ao soltar o clique no slider ou após IA)
   const commitHistory = (forcedImage = null, forcedControls = null) => {
     const entry = {
       image: forcedImage || processedImageRef.current,
@@ -98,12 +87,10 @@ export default function App() {
     }
   };
 
-  // Update specific control
   const updateControl = (key, value) => {
     setControls(prev => ({ ...prev, [key]: value }));
   };
 
-  // Presets
   const applyPreset = (type) => {
     let newControls = { ...defaultControls };
     if (type === 'lockscreen') newControls = { ...newControls, blur: 2, brightness: 90, contrast: 105 };
@@ -115,7 +102,6 @@ export default function App() {
     commitHistory(processedImageRef.current, newControls);
   };
 
-  // Build CSS filter string
   const getFilterString = () => {
     return `
       blur(${controls.blur}px) 
@@ -129,7 +115,6 @@ export default function App() {
     `;
   };
 
-  // Chamada pra IA (Remover Fundo ou Estilo Anime)
   const runAITool = async (type) => {
     if (!processedImage) return;
     setIsProcessingAI(true);
@@ -137,7 +122,7 @@ export default function App() {
     setErrorMsg('');
 
     try {
-      const apiKey = ""; // Injetada no runtime
+      const apiKey = "";
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
       
       const base64Data = processedImage.split(',')[1];
@@ -178,7 +163,6 @@ export default function App() {
       };
 
       const result = await fetchWithRetry();
-      
       const parts = result.candidates?.[0]?.content?.parts;
       const imagePart = parts?.find(p => p.inlineData);
       
@@ -186,13 +170,11 @@ export default function App() {
         const newImageData = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
         setProcessedImage(newImageData);
         setControls(defaultControls);
-        commitHistory(newImageData, defaultControls); // Salva no histórico!
+        commitHistory(newImageData, defaultControls);
       } else {
         throw new Error('Falha ao processar a imagem.');
       }
-
     } catch (err) {
-      console.error(err);
       setErrorMsg(`Deu ruim na IA, mano (${type}). Tenta dnv!`);
     } finally {
       setIsProcessingAI(false);
@@ -200,7 +182,6 @@ export default function App() {
     }
   };
 
-  // Download
   const handleDownload = () => {
     if (!processedImage) return;
 
@@ -212,7 +193,6 @@ export default function App() {
       const ctx = canvas.getContext('2d');
       canvas.width = img.width;
       canvas.height = img.height;
-
       ctx.filter = getFilterString();
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
@@ -225,24 +205,22 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen font-sans text-white overflow-hidden relative flex flex-col justify-between selection:bg-white/30">
+    <div className="min-h-screen font-sans text-white relative flex flex-col justify-between selection:bg-white/30">
       
-      {/* Dynamic Liquid Glass Background - Otimizado com transform-gpu e will-change */}
       <div 
-        className="absolute inset-0 z-0 bg-cover bg-center transition-all duration-[2000ms] ease-out scale-110 transform-gpu will-change-[filter]"
+        className="fixed inset-0 z-0 bg-cover bg-center transition-all duration-[2000ms] ease-out scale-110 transform-gpu backface-hidden"
         style={{
           backgroundImage: image ? `url(${image})` : 'linear-gradient(135deg, #1e1e2f, #11111c)',
-          filter: image ? `blur(90px) brightness(0.4) saturate(2)` : 'none',
+          filter: image ? `blur(60px) brightness(0.4) saturate(2)` : 'none',
         }}
       />
-      <div className="absolute inset-0 z-0 bg-black/40 mix-blend-overlay backdrop-blur-[2px]" />
+      <div className="fixed inset-0 z-0 bg-black/50 transform-gpu backface-hidden" />
 
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* Main Content Area */}
       <main className="relative z-10 w-full max-w-7xl mx-auto px-4 py-6 md:py-8 flex-grow flex flex-col items-center justify-center">
         
-        <div className="w-full bg-white/10 backdrop-blur-3xl border border-white/20 shadow-[0_8px_40px_0_rgba(0,0,0,0.4)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.3)] rounded-[2.5rem] p-6 md:p-8 flex flex-col gap-6 transition-all transform-gpu">
+        <div className="w-full bg-white/10 backdrop-blur-2xl border border-white/20 shadow-[0_8px_40px_0_rgba(0,0,0,0.4)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.3)] rounded-[2.5rem] p-6 md:p-8 flex flex-col gap-6 transform-gpu">
           
           <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-6">
             <div className="flex items-center gap-4">
@@ -257,20 +235,16 @@ export default function App() {
             
             {processedImage && (
               <div className="flex flex-wrap items-center gap-2 md:gap-3">
-                
-                {/* Ferramentas de Topo: Undo, Redo, Reset */}
                 <div className="flex bg-black/20 rounded-full p-1 border border-white/10 backdrop-blur-md">
                   <button 
                     onClick={undo} disabled={historyIndex <= 0}
                     className="p-2.5 rounded-full hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent transition-all group"
-                    title="Desfazer"
                   >
                     <Undo2 className="w-4 h-4 text-white group-active:-rotate-45 transition-transform" />
                   </button>
                   <button 
                     onClick={redo} disabled={historyIndex >= history.length - 1}
                     className="p-2.5 rounded-full hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent transition-all group"
-                    title="Refazer"
                   >
                     <Redo2 className="w-4 h-4 text-white group-active:rotate-45 transition-transform" />
                   </button>
@@ -278,7 +252,6 @@ export default function App() {
                   <button 
                     onClick={resetAll} disabled={historyIndex <= 0}
                     className="p-2.5 rounded-full hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent transition-all group"
-                    title="Redefinir Tudo"
                   >
                     <RotateCcw className="w-4 h-4 text-white group-active:-rotate-180 transition-transform duration-500" />
                   </button>
@@ -296,7 +269,6 @@ export default function App() {
           </header>
 
           {!processedImage ? (
-            // Upload State
             <div 
               onClick={() => fileInputRef.current?.click()}
               className="w-full h-[60vh] border-2 border-dashed border-white/30 rounded-[2rem] flex flex-col items-center justify-center gap-6 cursor-pointer hover:bg-white/10 hover:border-white/60 transition-all duration-300 group bg-black/10"
@@ -311,19 +283,15 @@ export default function App() {
               <input type="file" ref={fileInputRef} onChange={handleUpload} accept="image/*" className="hidden" />
             </div>
           ) : (
-            // Editor State
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               
-              {/* Image Preview Area */}
-              <div className="lg:col-span-6 xl:col-span-7 flex flex-col items-center justify-center bg-black/30 rounded-[2rem] p-4 md:p-8 border border-white/10 relative overflow-hidden group shadow-inner">
+              <div className="lg:col-span-6 xl:col-span-7 flex flex-col items-center justify-center bg-black/30 rounded-[2rem] p-4 md:p-8 border border-white/10 relative overflow-hidden group shadow-inner transform-gpu">
                 
-                {/* Botão Compare (Antes e Depois) flutuando */}
                 <button
                   onPointerDown={() => setShowBefore(true)}
                   onPointerUp={() => setShowBefore(false)}
                   onPointerLeave={() => setShowBefore(false)}
                   className="absolute top-6 left-6 z-20 bg-black/60 hover:bg-black/80 backdrop-blur-md px-4 py-2 rounded-full text-white/80 hover:text-white transition-all border border-white/10 flex items-center gap-2 active:scale-95 shadow-xl select-none"
-                  title="Segure para ver o original"
                 >
                   <SplitSquareHorizontal className="w-4 h-4" />
                   <span className="text-sm font-semibold tracking-wide">Compare</span>
@@ -332,18 +300,16 @@ export default function App() {
                 <div className="relative w-full aspect-[9/16] max-h-[60vh] flex items-center justify-center rounded-2xl overflow-hidden shadow-2xl transition-all">
                   <div className="absolute inset-0 bg-[url('https://transparenttextures.com/patterns/cubes.png')] opacity-20" />
                   
-                  {/* Imagem Original (Aparece quando segura o botão Compare) */}
                   <img 
                     src={image} 
                     alt="Original" 
-                    className={`absolute max-w-full max-h-full object-contain transition-opacity duration-500 ease-in-out ${showBefore ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+                    className={`absolute max-w-full max-h-full object-contain transition-opacity duration-500 ease-in-out transform-gpu ${showBefore ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
                   />
                   
-                  {/* Imagem Editada */}
                   <img 
                     src={processedImage} 
                     alt="Preview" 
-                    className={`max-w-full max-h-full object-contain transition-all duration-500 ease-in-out transform-gpu will-change-[filter] ${showBefore ? 'opacity-0' : 'opacity-100'}`}
+                    className={`max-w-full max-h-full object-contain transition-all duration-500 ease-in-out transform-gpu ${showBefore ? 'opacity-0' : 'opacity-100'}`}
                     style={{ filter: getFilterString() }}
                   />
                 </div>
@@ -351,16 +317,13 @@ export default function App() {
                 <button 
                   onClick={() => { setImage(null); setProcessedImage(null); setHistory([]); }}
                   className="absolute top-6 right-6 z-20 bg-black/60 hover:bg-black/80 backdrop-blur-md p-3 rounded-full text-white transition-all opacity-0 group-hover:opacity-100 hover:scale-110 border border-white/10"
-                  title="Trocar Imagem"
                 >
                   <Upload className="w-5 h-5" />
                 </button>
               </div>
 
-              {/* Controls Area */}
-              <div className="lg:col-span-6 xl:col-span-5 flex flex-col gap-6 max-h-[65vh] overflow-y-auto pr-2 custom-scrollbar">
+              <div className="lg:col-span-6 xl:col-span-5 flex flex-col gap-6 max-h-[65vh] overflow-y-auto pr-2 custom-scrollbar transform-gpu">
                 
-                {/* AI Tools */}
                 <div className="space-y-3">
                   <h3 className="text-xs font-bold uppercase tracking-widest text-white/40 flex items-center gap-2 ml-2">
                     <Wand2 className="w-4 h-4" /> Bruxarias da IA
@@ -395,7 +358,6 @@ export default function App() {
                   {errorMsg && <p className="text-red-400 text-sm mt-2 ml-2 font-medium">{errorMsg}</p>}
                 </div>
 
-                {/* Presets */}
                 <div className="space-y-3">
                   <h3 className="text-xs font-bold uppercase tracking-widest text-white/40 ml-2">Estilos Prontos</h3>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -406,7 +368,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Sliders Container */}
                 <div className="space-y-2">
                   <h3 className="text-xs font-bold uppercase tracking-widest text-white/40 ml-2 mb-4 mt-2">Ajustes Finos</h3>
                   
@@ -431,7 +392,6 @@ export default function App() {
         </div>
       </main>
 
-      {/* Footer bolado */}
       <footer className="relative z-10 w-full py-5 flex items-center justify-center backdrop-blur-xl bg-black/20 border-t border-white/10">
         <a 
           href="https://github.com/lyraEz" 
@@ -445,9 +405,7 @@ export default function App() {
         </a>
       </footer>
 
-      {/* Custom Styles Inject */}
       <style dangerouslySetInnerHTML={{__html: `
-        /* Custom Scrollbar pro Glassmorphism */
         .custom-scrollbar::-webkit-scrollbar {
           width: 6px;
         }
@@ -463,7 +421,6 @@ export default function App() {
           background: rgba(255, 255, 255, 0.4);
         }
 
-        /* Range Slider brabo com animação */
         input[type=range] {
           -webkit-appearance: none;
           background: rgba(255, 255, 255, 0.15);
@@ -493,7 +450,6 @@ export default function App() {
           background: #f0f0f0;
         }
         
-        /* Pop animation pros números */
         @keyframes popNumber {
           0% { transform: scale(1); color: rgba(255,255,255,0.8); }
           50% { transform: scale(1.3); color: #fff; background: rgba(255,255,255,0.3); }
@@ -549,8 +505,8 @@ function SliderControl({ icon, label, value, min, max, onChange, onDragEnd, suff
         max={max} 
         value={value} 
         onChange={(e) => onChange(Number(e.target.value))}
-        onPointerUp={onDragEnd} // Salva no histórico quando solta o clique/dedo
-        onTouchEnd={onDragEnd}  // Garantia pro mobile
+        onPointerUp={onDragEnd}
+        onTouchEnd={onDragEnd}
         className="w-full cursor-pointer focus:outline-none"
       />
     </div>
