@@ -3,7 +3,7 @@ import {
   Upload, Download, Image as ImageIcon, Wand2, SlidersHorizontal,
   Smartphone, LayoutGrid, Github, Sun, Contrast, Droplet, Loader2,
   Palette, Moon, SunMedium, ArrowRightLeft, Undo2, Redo2, RotateCcw,
-  SplitSquareHorizontal, Sparkles
+  SplitSquareHorizontal, Sparkles, Monitor, Maximize, X
 } from 'lucide-react';
 
 export default function App() {
@@ -13,6 +13,7 @@ export default function App() {
   const [aiActionType, setAiActionType] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [showBefore, setShowBefore] = useState(false);
+  const [showCloseModal, setShowCloseModal] = useState(false);
 
   const defaultControls = {
     blur: 0, brightness: 100, contrast: 100, saturation: 100,
@@ -115,6 +116,39 @@ export default function App() {
     `;
   };
 
+  const stretchImage = (mode) => {
+    if (!processedImage) return;
+    
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      let targetW, targetH;
+      
+      if (mode === 'current') {
+        targetW = window.screen.width;
+        targetH = window.screen.height;
+      } else if (mode === 'pc') {
+        targetW = 1920;
+        targetH = 1080;
+      } else if (mode === 'mobile') {
+        targetW = 1080;
+        targetH = 1920;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = targetW;
+      canvas.height = targetH;
+      const ctx = canvas.getContext('2d');
+      
+      ctx.drawImage(img, 0, 0, targetW, targetH);
+      
+      const stretchedImg = canvas.toDataURL('image/png');
+      setProcessedImage(stretchedImg);
+      commitHistory(stretchedImg, controlsRef.current);
+    };
+    img.src = processedImage;
+  };
+
   const runAITool = async (type) => {
     if (!processedImage) return;
     setIsProcessingAI(true);
@@ -125,10 +159,10 @@ export default function App() {
       const apiKey = "";
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
       
-      const base64Data = processedImage.split(',')[1];
-      const mimeType = processedImage.match(/data:(.*?);/)[1];
-
+      let base64Data = processedImage.split(',')[1];
+      let mimeType = processedImage.match(/data:(.*?);/)[1];
       let prompt = "";
+
       if (type === 'bg') {
         prompt = "Remove the background of this image. Keep only the main subject and output it with a completely transparent background.";
       } else if (type === 'anime') {
@@ -204,9 +238,42 @@ export default function App() {
     };
   };
 
+  const handleDiscard = () => {
+    setImage(null);
+    setProcessedImage(null);
+    setHistory([]);
+    setHistoryIndex(-1);
+    setShowCloseModal(false);
+  };
+
   return (
     <div className="min-h-screen font-sans text-white relative flex flex-col justify-between selection:bg-white/30">
       
+      {showCloseModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md px-4 transform-gpu">
+          <div className="bg-white/10 border border-white/20 p-6 rounded-3xl max-w-sm w-full shadow-2xl">
+            <h3 className="text-xl font-bold text-white mb-2">Papo reto!</h3>
+            <p className="text-white/70 text-sm mb-6">
+              Se tu voltar agora, vai perder essa arte braba. Quer mesmo descartar tudo e começar do zero?
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowCloseModal(false)} 
+                className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-medium transition-all"
+              >
+                Deixa quieto
+              </button>
+              <button 
+                onClick={handleDiscard} 
+                className="flex-1 py-3 rounded-xl bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500/30 font-medium transition-all"
+              >
+                Descartar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div 
         className="fixed inset-0 z-0 bg-cover bg-center transition-all duration-[2000ms] ease-out scale-110 transform-gpu backface-hidden"
         style={{
@@ -222,7 +289,7 @@ export default function App() {
         
         <div className="w-full bg-white/10 backdrop-blur-2xl border border-white/20 shadow-[0_8px_40px_0_rgba(0,0,0,0.4)] shadow-[inset_0_1px_2px_rgba(255,255,255,0.3)] rounded-[2.5rem] p-6 md:p-8 flex flex-col gap-6 transform-gpu">
           
-          <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-6">
+          <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-6 relative">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-gradient-to-br from-white/20 to-white/5 rounded-2xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)] border border-white/10">
                 <SlidersHorizontal className="w-7 h-7 text-white" />
@@ -264,6 +331,14 @@ export default function App() {
                   <Download className="w-4 h-4 group-hover:-translate-y-1 transition-transform" />
                   <span className="hidden md:inline">Salvar</span>
                 </button>
+
+                <button 
+                  onClick={() => setShowCloseModal(true)}
+                  className="w-10 h-10 ml-2 flex items-center justify-center rounded-full bg-red-500/20 hover:bg-red-500/40 border border-red-500/30 text-red-400 transition-all hover:scale-105 active:scale-95"
+                  title="Descartar Arte"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
             )}
           </header>
@@ -277,8 +352,8 @@ export default function App() {
                 <Upload className="w-12 h-12 text-white/90" />
               </div>
               <div className="text-center">
-                <p className="text-xl font-medium text-white/90 mb-2">Joga a imagem aqui, mano</p>
-                <p className="text-sm text-white/50">Ou clica pra procurar no pc/celular</p>
+                <p className="text-xl font-medium text-white/90 mb-2">Joga a imagem aqui</p>
+                <p className="text-sm text-white/50">Ou clica pra procurar nos arquivos</p>
               </div>
               <input type="file" ref={fileInputRef} onChange={handleUpload} accept="image/*" className="hidden" />
             </div>
@@ -313,21 +388,44 @@ export default function App() {
                     style={{ filter: getFilterString() }}
                   />
                 </div>
-                
-                <button 
-                  onClick={() => { setImage(null); setProcessedImage(null); setHistory([]); }}
-                  className="absolute top-6 right-6 z-20 bg-black/60 hover:bg-black/80 backdrop-blur-md p-3 rounded-full text-white transition-all opacity-0 group-hover:opacity-100 hover:scale-110 border border-white/10"
-                >
-                  <Upload className="w-5 h-5" />
-                </button>
               </div>
 
               <div className="lg:col-span-6 xl:col-span-5 flex flex-col gap-6 max-h-[65vh] overflow-y-auto pr-2 custom-scrollbar transform-gpu">
                 
                 <div className="space-y-3">
                   <h3 className="text-xs font-bold uppercase tracking-widest text-white/40 flex items-center gap-2 ml-2">
-                    <Wand2 className="w-4 h-4" /> Bruxarias da IA
+                    <Maximize className="w-4 h-4" /> Esticar Imagem (Sem Cortar)
                   </h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button 
+                      onClick={() => stretchImage('current')}
+                      className="flex flex-col items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 p-3 rounded-2xl transition-all active:scale-[0.98]"
+                    >
+                      <Maximize className="w-5 h-5 text-emerald-400" />
+                      <span className="text-xs text-center font-medium">Tua Tela</span>
+                    </button>
+                    <button 
+                      onClick={() => stretchImage('pc')}
+                      className="flex flex-col items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 p-3 rounded-2xl transition-all active:scale-[0.98]"
+                    >
+                      <Monitor className="w-5 h-5 text-blue-400" />
+                      <span className="text-xs text-center font-medium">PC (16:9)</span>
+                    </button>
+                    <button 
+                      onClick={() => stretchImage('mobile')}
+                      className="flex flex-col items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 p-3 rounded-2xl transition-all active:scale-[0.98]"
+                    >
+                      <Smartphone className="w-5 h-5 text-purple-400" />
+                      <span className="text-xs text-center font-medium">Celular</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-white/40 flex items-center gap-2 ml-2">
+                    <Wand2 className="w-4 h-4" /> IA
+                  </h3>
+                  
                   <div className="grid grid-cols-2 gap-3">
                     <button 
                       onClick={() => runAITool('bg')}
@@ -359,7 +457,7 @@ export default function App() {
                 </div>
 
                 <div className="space-y-3">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-white/40 ml-2">Estilos Prontos</h3>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-white/40 ml-2">Filtros Rápidos</h3>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     <PresetButton icon={<Smartphone className="w-5 h-5" />} label="Bloqueio" onClick={() => applyPreset('lockscreen')} />
                     <PresetButton icon={<LayoutGrid className="w-5 h-5" />} label="Inicial" onClick={() => applyPreset('homescreen')} />
@@ -512,5 +610,3 @@ function SliderControl({ icon, label, value, min, max, onChange, onDragEnd, suff
     </div>
   );
 }
-
-
