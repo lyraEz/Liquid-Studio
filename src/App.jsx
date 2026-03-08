@@ -157,64 +157,81 @@ export default function App() {
     setErrorMsg('');
 
     try {
-      // Puxando a chave do .env certinho igual tu fez
-      const apiKey = import.meta.env.VITE_API_KEY;
+      let envKey = "";
+      try {
+        envKey = import.meta.env.VITE_API_KEY;
+      } catch(e) {}
       
-      if (!apiKey) {
-        throw new Error("Chave da API não encontrada. Confere lá no Cloudflare!");
-      }
+      const base64Data = processedImage.split(',')[1];
+      const mimeType = processedImage.match(/data:(.*?);/)[1];
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
-      
-      let base64Data = processedImage.split(',')[1];
-      let mimeType = processedImage.match(/data:(.*?);/)[1];
-      let prompt = "";
+      if (!envKey || envKey.trim() === '') {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=`;
+        let prompt = type === 'bg' ? "Remove the background of this image. Keep only the main subject and output it with a completely transparent background." : "Convert this image into a high-quality, beautiful anime style illustration. Keep the main subjects and composition similar.";
+        
+        const payload = {
+          contents: [{
+            parts: [{ text: prompt }, { inlineData: { mimeType, data: base64Data } }]
+          }],
+          generationConfig: { responseModalities: ["IMAGE"] }
+        };
 
-      if (type === 'bg') {
-        prompt = "Remove the background of this image. Keep only the main subject and output it with a completely transparent background.";
-      } else if (type === 'anime') {
-        prompt = "Convert this image into a high-quality, beautiful anime style illustration. Keep the main subjects and composition similar.";
-      }
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.error?.message || 'Erro de API');
+        }
 
-      const payload = {
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inlineData: { mimeType, data: base64Data } }
-          ]
-        }],
-        generationConfig: { responseModalities: ["IMAGE"] }
-      };
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      
-      const data = await response.json();
-
-      // Aqui é o pulo do gato: se o Google devolver erro, a gente mostra exatamente oq ele falou
-      if (!response.ok) {
-        console.error("ERRO COMPLETO DA API:", data);
-        throw new Error(data.error?.message || `Erro do Google: Status ${response.status}`);
-      }
-
-      const parts = data.candidates?.[0]?.content?.parts;
-      const imagePart = parts?.find(p => p.inlineData);
-      
-      if (imagePart?.inlineData?.data) {
-        const newImageData = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
-        setProcessedImage(newImageData);
-        setControls(defaultControls);
-        commitHistory(newImageData, defaultControls);
+        const parts = data.candidates?.[0]?.content?.parts;
+        const imagePart = parts?.find(p => p.inlineData);
+        
+        if (imagePart?.inlineData?.data) {
+          const newImageData = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+          setProcessedImage(newImageData);
+          setControls(defaultControls);
+          commitHistory(newImageData, defaultControls);
+        } else {
+          throw new Error('Falha ao processar a imagem.');
+        }
       } else {
-        throw new Error('Google não devolveu a imagem. Tenta de novo!');
+        if (type === 'bg') {
+          const formData = new FormData();
+          formData.append('image_file_b64', base64Data);
+          formData.append('size', 'auto');
+          
+          const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+            method: 'POST',
+            headers: { 'X-Api-Key': envKey },
+            body: formData
+          });
+
+          if (!response.ok) {
+            throw new Error("Chave invalida do Remove.bg ou limite excedido.");
+          }
+          
+          const blob = await response.blob();
+          
+          const newImg = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(blob);
+          });
+
+          setProcessedImage(newImg);
+          setControls(defaultControls);
+          commitHistory(newImg, defaultControls);
+        } else if (type === 'anime') {
+          throw new Error("API publica do Google nao suporta Anime. Use so a remocao de fundo!");
+        }
       }
     } catch (err) {
-      console.error(err);
-      // Mostra o erro exato na tela em vermelhão
-      setErrorMsg(`Erro na IA: ${err.message}`);
+      setErrorMsg(err.message);
     } finally {
       setIsProcessingAI(false);
       setAiActionType('');
@@ -260,7 +277,7 @@ export default function App() {
           <div className="bg-white/10 border border-white/20 p-6 rounded-3xl max-w-sm w-full shadow-2xl">
             <h3 className="text-xl font-bold text-white mb-2">Papo reto!</h3>
             <p className="text-white/70 text-sm mb-6">
-              Se tu voltar agora, vai perder essa arte braba. Quer mesmo descartar tudo e começar do zero?
+              Se tu voltar agora, vai perder essa arte braba. Quer mesmo descartar tudo e comecar do zero?
             </p>
             <div className="flex gap-3">
               <button 
@@ -341,7 +358,6 @@ export default function App() {
                 <button 
                   onClick={() => setShowCloseModal(true)}
                   className="w-10 h-10 ml-2 flex items-center justify-center rounded-full bg-red-500/20 hover:bg-red-500/40 border border-red-500/30 text-red-400 transition-all hover:scale-105 active:scale-95"
-                  title="Descartar Arte"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -400,7 +416,7 @@ export default function App() {
                 
                 <div className="space-y-3">
                   <h3 className="text-xs font-bold uppercase tracking-widest text-white/40 flex items-center gap-2 ml-2">
-                    <Maximize className="w-4 h-4" /> Esticar Imagem (Sem Cortar)
+                    <Maximize className="w-4 h-4" /> Esticar Imagem
                   </h3>
                   <div className="grid grid-cols-3 gap-2">
                     <button 
@@ -429,7 +445,7 @@ export default function App() {
 
                 <div className="space-y-3">
                   <h3 className="text-xs font-bold uppercase tracking-widest text-white/40 flex items-center gap-2 ml-2">
-                    <Wand2 className="w-4 h-4" /> IA (Modo Experimental)
+                    <Wand2 className="w-4 h-4" /> IA (Remove.bg)
                   </h3>
                   
                   <div className="grid grid-cols-2 gap-3">
@@ -467,12 +483,12 @@ export default function App() {
                 </div>
 
                 <div className="space-y-3">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-white/40 ml-2">Filtros Rápidos</h3>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-white/40 ml-2">Filtros Rapidos</h3>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     <PresetButton icon={<Smartphone className="w-5 h-5" />} label="Bloqueio" onClick={() => applyPreset('lockscreen')} />
                     <PresetButton icon={<LayoutGrid className="w-5 h-5" />} label="Inicial" onClick={() => applyPreset('homescreen')} />
                     <PresetButton icon={<Palette className="w-5 h-5" />} label="Cyber" onClick={() => applyPreset('cyberpunk')} />
-                    <PresetButton icon={<SunMedium className="w-5 h-5" />} label="Retrô" onClick={() => applyPreset('vintage')} />
+                    <PresetButton icon={<SunMedium className="w-5 h-5" />} label="Retro" onClick={() => applyPreset('vintage')} />
                   </div>
                 </div>
 
@@ -483,12 +499,12 @@ export default function App() {
                     <SliderControl icon={<Droplet />} label="Blur" value={controls.blur} min={0} max={50} onChange={(v) => updateControl('blur', v)} onDragEnd={() => commitHistory()} suffix="px" />
                     <SliderControl icon={<Sun />} label="Brilho" value={controls.brightness} min={0} max={200} onChange={(v) => updateControl('brightness', v)} onDragEnd={() => commitHistory()} />
                     <SliderControl icon={<Contrast />} label="Contraste" value={controls.contrast} min={0} max={200} onChange={(v) => updateControl('contrast', v)} onDragEnd={() => commitHistory()} />
-                    <SliderControl icon={<ImageIcon />} label="Saturação" value={controls.saturation} min={0} max={200} onChange={(v) => updateControl('saturation', v)} onDragEnd={() => commitHistory()} />
+                    <SliderControl icon={<ImageIcon />} label="Saturacao" value={controls.saturation} min={0} max={200} onChange={(v) => updateControl('saturation', v)} onDragEnd={() => commitHistory()} />
                   </div>
 
                   <div className="flex flex-col gap-4 bg-white/5 p-5 rounded-[2rem] border border-white/10 shadow-[inset_0_1px_2px_rgba(255,255,255,0.05)] mt-4 transform-gpu">
                     <SliderControl icon={<Palette />} label="Matiz (Cor)" value={controls.hue} min={0} max={360} onChange={(v) => updateControl('hue', v)} onDragEnd={() => commitHistory()} suffix="°" />
-                    <SliderControl icon={<SunMedium />} label="Sépia" value={controls.sepia} min={0} max={100} onChange={(v) => updateControl('sepia', v)} onDragEnd={() => commitHistory()} />
+                    <SliderControl icon={<SunMedium />} label="Sepia" value={controls.sepia} min={0} max={100} onChange={(v) => updateControl('sepia', v)} onDragEnd={() => commitHistory()} />
                     <SliderControl icon={<Moon />} label="Preto e Branco" value={controls.grayscale} min={0} max={100} onChange={(v) => updateControl('grayscale', v)} onDragEnd={() => commitHistory()} />
                     <SliderControl icon={<ArrowRightLeft />} label="Inverter" value={controls.invert} min={0} max={100} onChange={(v) => updateControl('invert', v)} onDragEnd={() => commitHistory()} />
                   </div>
