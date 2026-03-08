@@ -3,14 +3,13 @@ import {
   Upload, Download, Image as ImageIcon, Wand2, SlidersHorizontal,
   Smartphone, LayoutGrid, Github, Sun, Contrast, Droplet, Loader2,
   Palette, Moon, SunMedium, ArrowRightLeft, Undo2, Redo2, RotateCcw,
-  SplitSquareHorizontal, Sparkles, Monitor, Maximize, X
+  SplitSquareHorizontal, Monitor, Maximize, X
 } from 'lucide-react';
 
 export default function App() {
   const [image, setImage] = useState(null);
   const [processedImage, setProcessedImage] = useState(null);
   const [isProcessingAI, setIsProcessingAI] = useState(false);
-  const [aiActionType, setAiActionType] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [showBefore, setShowBefore] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
@@ -150,10 +149,9 @@ export default function App() {
     img.src = processedImage;
   };
 
-  const runAITool = async (type) => {
+  const removeBg = async () => {
     if (!processedImage) return;
     setIsProcessingAI(true);
-    setAiActionType(type);
     setErrorMsg('');
 
     try {
@@ -167,7 +165,7 @@ export default function App() {
 
       if (!envKey || envKey.trim() === '') {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=`;
-        let prompt = type === 'bg' ? "Remove the background of this image. Keep only the main subject and output it with a completely transparent background." : "Convert this image into a high-quality, beautiful anime style illustration. Keep the main subjects and composition similar.";
+        const prompt = "Remove the background of this image. Keep only the main subject and output it with a completely transparent background.";
         
         const payload = {
           contents: [{
@@ -200,41 +198,36 @@ export default function App() {
           throw new Error('Falha ao processar a imagem.');
         }
       } else {
-        if (type === 'bg') {
-          const formData = new FormData();
-          formData.append('image_file_b64', base64Data);
-          formData.append('size', 'auto');
-          
-          const response = await fetch('https://api.remove.bg/v1.0/removebg', {
-            method: 'POST',
-            headers: { 'X-Api-Key': envKey },
-            body: formData
-          });
+        const formData = new FormData();
+        formData.append('image_file_b64', base64Data);
+        formData.append('size', 'auto');
+        
+        const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+          method: 'POST',
+          headers: { 'X-Api-Key': envKey },
+          body: formData
+        });
 
-          if (!response.ok) {
-            throw new Error("Chave invalida do Remove.bg ou limite excedido.");
-          }
-          
-          const blob = await response.blob();
-          
-          const newImg = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.readAsDataURL(blob);
-          });
-
-          setProcessedImage(newImg);
-          setControls(defaultControls);
-          commitHistory(newImg, defaultControls);
-        } else if (type === 'anime') {
-          throw new Error("API publica do Google nao suporta Anime. Use so a remocao de fundo!");
+        if (!response.ok) {
+          throw new Error("Chave invalida do Remove.bg ou limite excedido.");
         }
+        
+        const blob = await response.blob();
+        
+        const newImg = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(blob);
+        });
+
+        setProcessedImage(newImg);
+        setControls(defaultControls);
+        commitHistory(newImg, defaultControls);
       }
     } catch (err) {
       setErrorMsg(err.message);
     } finally {
       setIsProcessingAI(false);
-      setAiActionType('');
     }
   };
 
@@ -448,31 +441,23 @@ export default function App() {
                     <Wand2 className="w-4 h-4" /> IA (Remove.bg)
                   </h3>
                   
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-3">
                     <button 
-                      onClick={() => runAITool('bg')}
+                      onClick={removeBg}
                       disabled={isProcessingAI}
-                      className="relative overflow-hidden flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 hover:from-indigo-500/30 hover:to-purple-500/30 border border-indigo-400/30 hover:border-indigo-400/60 p-4 rounded-2xl font-semibold transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed group shadow-[0_4px_20px_rgba(99,102,241,0.1)]"
+                      className="w-full relative overflow-hidden flex items-center justify-center gap-3 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 hover:from-indigo-500/30 hover:to-purple-500/30 border border-indigo-400/30 hover:border-indigo-400/60 p-4 rounded-2xl font-semibold transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed group shadow-[0_4px_20px_rgba(99,102,241,0.1)]"
                     >
-                      {isProcessingAI && aiActionType === 'bg' ? (
-                        <Loader2 className="w-6 h-6 animate-spin text-indigo-300" />
+                      {isProcessingAI ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin text-indigo-300" />
+                          <span className="text-indigo-50 text-sm">Arrancando o fundo...</span>
+                        </>
                       ) : (
-                        <ImageIcon className="w-6 h-6 text-indigo-300 group-hover:scale-110 group-hover:-rotate-12 transition-all" />
+                        <>
+                          <ImageIcon className="w-5 h-5 text-indigo-300 group-hover:scale-110 group-hover:-rotate-12 transition-all" />
+                          <span className="text-indigo-50 text-sm">Tirar Fundo da Imagem</span>
+                        </>
                       )}
-                      <span className="text-indigo-50 text-xs text-center">Tirar Fundo</span>
-                    </button>
-                    
-                    <button 
-                      onClick={() => runAITool('anime')}
-                      disabled={isProcessingAI}
-                      className="relative overflow-hidden flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-pink-500/20 to-orange-500/20 hover:from-pink-500/30 hover:to-orange-500/30 border border-pink-400/30 hover:border-pink-400/60 p-4 rounded-2xl font-semibold transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed group shadow-[0_4px_20px_rgba(236,72,153,0.1)]"
-                    >
-                      {isProcessingAI && aiActionType === 'anime' ? (
-                        <Loader2 className="w-6 h-6 animate-spin text-pink-300" />
-                      ) : (
-                        <Sparkles className="w-6 h-6 text-pink-300 group-hover:scale-110 group-hover:rotate-12 transition-all" />
-                      )}
-                      <span className="text-pink-50 text-xs text-center">Virar Anime</span>
                     </button>
                   </div>
                   {errorMsg && (
