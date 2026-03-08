@@ -42,6 +42,7 @@ export default function App() {
         setControls(defaultControls);
         setHistory([{ image: newImg, controls: defaultControls }]);
         setHistoryIndex(0);
+        setErrorMsg('');
       };
       reader.readAsDataURL(file);
     }
@@ -156,7 +157,13 @@ export default function App() {
     setErrorMsg('');
 
     try {
+      // Puxando a chave do .env certinho igual tu fez
       const apiKey = import.meta.env.VITE_API_KEY;
+      
+      if (!apiKey) {
+        throw new Error("Chave da API não encontrada. Confere lá no Cloudflare!");
+      }
+
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
       
       let base64Data = processedImage.split(',')[1];
@@ -179,25 +186,21 @@ export default function App() {
         generationConfig: { responseModalities: ["IMAGE"] }
       };
 
-      const fetchWithRetry = async (retries = 5, delay = 1000) => {
-        for (let i = 0; i < retries; i++) {
-          try {
-            const response = await fetch(url, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            });
-            if (!response.ok) throw new Error('API error');
-            return await response.json();
-          } catch (err) {
-            if (i === retries - 1) throw err;
-            await new Promise(res => setTimeout(res, delay * Math.pow(2, i)));
-          }
-        }
-      };
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      const data = await response.json();
 
-      const result = await fetchWithRetry();
-      const parts = result.candidates?.[0]?.content?.parts;
+      // Aqui é o pulo do gato: se o Google devolver erro, a gente mostra exatamente oq ele falou
+      if (!response.ok) {
+        console.error("ERRO COMPLETO DA API:", data);
+        throw new Error(data.error?.message || `Erro do Google: Status ${response.status}`);
+      }
+
+      const parts = data.candidates?.[0]?.content?.parts;
       const imagePart = parts?.find(p => p.inlineData);
       
       if (imagePart?.inlineData?.data) {
@@ -206,10 +209,12 @@ export default function App() {
         setControls(defaultControls);
         commitHistory(newImageData, defaultControls);
       } else {
-        throw new Error('Falha ao processar a imagem.');
+        throw new Error('Google não devolveu a imagem. Tenta de novo!');
       }
     } catch (err) {
-      setErrorMsg(`Deu ruim na IA, mano (${type}). Tenta dnv!`);
+      console.error(err);
+      // Mostra o erro exato na tela em vermelhão
+      setErrorMsg(`Erro na IA: ${err.message}`);
     } finally {
       setIsProcessingAI(false);
       setAiActionType('');
@@ -244,6 +249,7 @@ export default function App() {
     setHistory([]);
     setHistoryIndex(-1);
     setShowCloseModal(false);
+    setErrorMsg('');
   };
 
   return (
@@ -423,7 +429,7 @@ export default function App() {
 
                 <div className="space-y-3">
                   <h3 className="text-xs font-bold uppercase tracking-widest text-white/40 flex items-center gap-2 ml-2">
-                    <Wand2 className="w-4 h-4" /> IA
+                    <Wand2 className="w-4 h-4" /> IA (Modo Experimental)
                   </h3>
                   
                   <div className="grid grid-cols-2 gap-3">
@@ -453,7 +459,11 @@ export default function App() {
                       <span className="text-pink-50 text-xs text-center">Virar Anime</span>
                     </button>
                   </div>
-                  {errorMsg && <p className="text-red-400 text-sm mt-2 ml-2 font-medium">{errorMsg}</p>}
+                  {errorMsg && (
+                    <div className="mt-2 ml-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                      <p className="text-red-400 text-xs font-medium font-mono break-words">{errorMsg}</p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-3">
