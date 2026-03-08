@@ -156,7 +156,7 @@ export default function App() {
     setErrorMsg('');
 
     try {
-      const apiKey = "";
+      const apiKey = import.meta.env.VITE_API_KEY;
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
       
       let base64Data = processedImage.split(',')[1];
